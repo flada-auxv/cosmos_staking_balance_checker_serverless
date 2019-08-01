@@ -133,7 +133,7 @@ class StakingBalanceChecker
 
   def notify(result)
     uri  = URI.parse(ENV['SLACK_ENDPOINT'])
-    params = { channel: '#test', text: result.to_s }
+    params = { channel: '#test', text: result.to_json }
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     http.start do
