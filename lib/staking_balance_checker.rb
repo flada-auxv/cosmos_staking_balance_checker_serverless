@@ -19,7 +19,7 @@ class StakingBalanceChecker
   end
 
   def run
-    check_if_first_run
+    preprocess
 
     data = extract
     result = transform(data)
@@ -27,8 +27,18 @@ class StakingBalanceChecker
     notify(result)
   end
 
-  def check_if_first_run
-    @first_run = !!last_updated_at
+  def preprocess
+    @first_run = false
+
+    begin
+      @last_updated_at = @s3_cli.get_object(bucket: ENV['BUCKET_NAME'], key: KEY_LAST_UPDATED_AT).body.read
+    rescue Aws::S3::Errors::NoSuchKey
+      @first_run = true
+      return
+    end
+
+    body = @s3_cli.get_object(bucket: ENV['BUCKET_NAME'], key: @last_updated_at).body.read
+    @last_result = JSON.parse(body)
   end
 
   def extract
@@ -57,7 +67,7 @@ class StakingBalanceChecker
     {
       'data'             => data,
       'executed_at'      => now,
-      'last_executed_at' => last_updated_at
+      'last_executed_at' => @last_updated_at || '-'
     }
   end
 
@@ -79,7 +89,7 @@ class StakingBalanceChecker
     return nil if @first_run
     return nil unless this_time_rank
 
-    last_data = find_validators_data_from(last_result, address)
+    last_data = find_validators_data_from(@last_result, address)
     return nil unless last_data
 
     last_data['rank'] - this_time_rank
@@ -89,7 +99,7 @@ class StakingBalanceChecker
     return nil if @first_run
     return nil unless this_time_balance
 
-    last_data = find_validators_data_from(last_result, address)
+    last_data = find_validators_data_from(@last_result, address)
     return nil unless last_data
 
     this_time_balance.to_i - last_data['delegated_balance'].to_i
@@ -97,14 +107,6 @@ class StakingBalanceChecker
 
   def find_validators_data_from(result, address)
     result['data'].find {|h| h['address'] == address }
-  end
-
-  def last_result
-    raise if @first_run
-    return @last_result if @last_result
-
-    body = @s3_cli.get_object(bucket: ENV['BUCKET_NAME'], key: last_updated_at).body.read
-    @last_result = JSON.parse(body)
   end
 
   def now
@@ -117,17 +119,6 @@ class StakingBalanceChecker
     when 1 then 'unbonding'
     when 2 then 'bonded'
     else raise ArgumentError('unknown status')
-    end
-  end
-
-  def last_updated_at
-    return nil if @first_run
-    return @last_updated_at if @last_updated_at
-
-    begin
-      @last_updated_at = @s3_cli.get_object(bucket: ENV['BUCKET_NAME'], key: KEY_LAST_UPDATED_AT).body.read
-    rescue Aws::S3::Errors::NoSuchKey
-      nil
     end
   end
 
