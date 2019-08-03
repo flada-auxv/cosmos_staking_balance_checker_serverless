@@ -78,7 +78,7 @@ class StakingBalanceChecker
       'moniker'                  => raw_data['description']['moniker'],
       'address'                  => raw_data['operator_address'],
       'status'                   => status_to_s(raw_data['status']),
-      'delegated_balance'        => raw_data['tokens'],
+      'delegated_balance'        => atom_to_f(raw_data['tokens']),
       'delegated_balance_change' => delegated_balance_change(raw_data['operator_address'], raw_data['tokens']),
       'rank'                     => rank,
       'rank_change'              => rank_change(raw_data['operator_address'], rank)
@@ -102,7 +102,7 @@ class StakingBalanceChecker
     last_data = find_validators_data_from(@last_result, address)
     return nil unless last_data
 
-    this_time_balance.to_i - last_data['delegated_balance'].to_i
+    atom_to_f(this_time_balance.to_i - last_data['delegated_balance'].to_i)
   end
 
   def find_validators_data_from(result, address)
@@ -120,6 +120,10 @@ class StakingBalanceChecker
     when 2 then 'bonded'
     else raise ArgumentError('unknown status')
     end
+  end
+
+  def atom_to_f(balance)
+    balance / (10 ** 6).to_f
   end
 
   def load_to_s3(result)
