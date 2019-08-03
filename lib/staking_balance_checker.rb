@@ -14,24 +14,28 @@ class StakingBalanceChecker
     end
   end
 
-  def initialize
+  def initialize()
     @s3_cli = Aws::S3::Client.new
-
-    @first_run = true unless last_updated_at
   end
 
   def run
-    data = extract_all
+    check_if_first_run
+
+    data = extract
     result = transform(data)
     load_to_s3(result)
     notify(result)
   end
 
-  def extract_all
-    STATUSES.flat_map {|status| extract(status) }
+  def check_if_first_run
+    @first_run = !!last_updated_at
   end
 
-  def extract(status)
+  def extract
+    STATUSES.flat_map {|status| extract_with_each_of(status) }
+  end
+
+  def extract_with_each_of(status)
     res = Net::HTTP.get_response(url_for(status))
     raise unless res.code == '200'
 
@@ -48,25 +52,26 @@ class StakingBalanceChecker
     n = 0
     rank_acc = -> { n += 1 }
 
-    data =
-      raw_data.sort_by {|d| -(d['tokens'].to_i) }.map {|d|
-        rank = rank_acc.call if d['status'] == 2
-
-        {
-          'moniker'                  => d['description']['moniker'],
-          'address'                  => d['operator_address'],
-          'status'                   => status_to_s(d['status']),
-          'delegated_balance'        => d['tokens'],
-          'delegated_balance_change' => delegated_balance_change(d['operator_address'], d['tokens']),
-          'rank'                     => rank,
-          'rank_change'              => rank_change(d['operator_address'], rank)
-        }
-      }
+    data = raw_data.sort_by {|d| -(d['tokens'].to_i) }.map {|d| transform_each_of(d, rank_acc) }
 
     {
       'data'             => data,
       'executed_at'      => now,
       'last_executed_at' => last_updated_at
+    }
+  end
+
+  def transform_each_of(raw_data, rank_acc)
+    rank = rank_acc.call if raw_data['status'] == 2
+
+    {
+      'moniker'                  => raw_data['description']['moniker'],
+      'address'                  => raw_data['operator_address'],
+      'status'                   => status_to_s(raw_data['status']),
+      'delegated_balance'        => raw_data['tokens'],
+      'delegated_balance_change' => delegated_balance_change(raw_data['operator_address'], raw_data['tokens']),
+      'rank'                     => rank,
+      'rank_change'              => rank_change(raw_data['operator_address'], rank)
     }
   end
 
@@ -132,14 +137,43 @@ class StakingBalanceChecker
   end
 
   def notify(result)
-    uri  = URI.parse(ENV['SLACK_ENDPOINT'])
-    params = { channel: '#test', text: result.to_json }
+    uri = URI.parse(ENV['SLACK_ENDPOINT'])
+    params = {
+      channel: ENV['SLACK_CHANNEL'],
+      text: result['data'].map {|h| text(h) }.join("\n")
+    }
+
+    puts params.to_json
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
+
     http.start do
       request = Net::HTTP::Post.new(uri.path)
       request.set_form_data(payload: params.to_json)
       http.request(request)
+    end
+  end
+
+  def text(hash)
+    "##{hash['rank']} ( #{change_text(hash['rank_change'])} ) #{hash['moniker']}\t#{status_text(hash['status'])}\tdelegated_balance: #{hash['delegated_balance']}( #{change_text(hash['delegated_balance_change'])} )"
+  end
+
+  def status_text(status)
+    case status
+    when 'unbonded' then "#{status} :innocent:"
+    when 'unbonding' then "#{status} :exploding_head:"
+    when 'bonded' then "#{status} :sunglasses:"
+    else raise ArgumentError('unknown status')
+    end
+  end
+
+  def change_text(change)
+    if change.nil? || change.zero?
+      ':arrow_right:'
+    elsif change.positive?
+      "+#{change} :arrow_heading_up:"
+    elsif change.negative?
+      "-#{change} :arrow_heading_down:"
     end
   end
 end

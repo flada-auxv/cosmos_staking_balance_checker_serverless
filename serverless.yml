@@ -15,6 +15,9 @@ provider:
 functions:
   staking_balance_check:
     handler: handler.staking_balance_check
+    events:
+        - schedule: rate(3 hours)
     environment:
       SLACK_ENDPOINT: ${env:SLACK_ENDPOINT}
+      SLACK_CHANNEL: ${env:SLACK_CHANNEL}
       BUCKET_NAME: ${env:BUCKET_NAME}
