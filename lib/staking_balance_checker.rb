@@ -164,7 +164,7 @@ class StakingBalanceChecker
     elsif change.positive?
       "+#{change} :arrow_heading_up:"
     elsif change.negative?
-      "-#{change} :arrow_heading_down:"
+      "#{change} :arrow_heading_down:"
     end
   end
 end
