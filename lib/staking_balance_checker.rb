@@ -72,7 +72,7 @@ class StakingBalanceChecker
   end
 
   def transform_each_of(raw_data, rank_acc)
-    rank = rank_acc.call if raw_data['status'] == 2
+    rank = raw_data['status'] == 2 ? rank_acc.call : nil
 
     {
       'moniker'                  => raw_data['description']['moniker'],
