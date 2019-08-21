@@ -135,7 +135,7 @@ class StakingBalanceChecker
     uri = URI.parse(ENV['SLACK_ENDPOINT'])
     params = {
       channel: ENV['SLACK_CHANNEL'],
-      text: result['data'].map {|h| text(h) }.join("\n")
+      text: result['data'].select {|h| h['rank'] || h['delegated_balance_change'] != 0 }.map {|h| text(h) }.join("\n")
     }
 
     puts params.to_json
