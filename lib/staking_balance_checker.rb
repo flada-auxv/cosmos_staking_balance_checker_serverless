@@ -90,7 +90,7 @@ class StakingBalanceChecker
     return nil unless this_time_rank
 
     last_data = find_validators_data_from(@last_result, address)
-    return nil unless last_data
+    return nil unless last_data&.dig('rank')
 
     last_data['rank'] - this_time_rank
   end
@@ -100,7 +100,7 @@ class StakingBalanceChecker
     return nil unless this_time_balance
 
     last_data = find_validators_data_from(@last_result, address)
-    return nil unless last_data
+    return nil unless last_data&.dig('delegated_balance')
 
     atom_to_f(this_time_balance.to_i - last_data['delegated_balance'].to_i)
   end
